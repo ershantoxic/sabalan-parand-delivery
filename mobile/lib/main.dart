@@ -82,7 +82,45 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 class HomeShell extends ConsumerStatefulWidget { const HomeShell({super.key}); @override ConsumerState<HomeShell> createState() => _HomeShellState(); }
 class _HomeShellState extends ConsumerState<HomeShell> { int index = 0; @override Widget build(BuildContext context) { final pages = [const DashboardPage(), const OrdersPage(), const ProfilePage()]; return Scaffold(body: pages[index], bottomNavigationBar: NavigationBar(selectedIndex: index, onDestinationSelected: (value) => setState(() => index = value), destinations: const [NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'خانه'), NavigationDestination(icon: Icon(Icons.list_alt_outlined), selectedIcon: Icon(Icons.list_alt), label: 'سفارش‌ها'), NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'پروفایل')])); } }
 
-class DashboardPage extends ConsumerWidget { const DashboardPage({super.key}); @override Widget build(BuildContext context, WidgetRef ref) => AppScaffold(title: 'تحویل سبلان پرند', body: ref.watch(ordersProvider).when(loading: () => const LoadingView(), error: (_, __) => RetryView(onRetry: () => ref.invalidate(ordersProvider)), data: (orders) { final delivered = orders.where((o) => o.status == 'delivered').length; return ListView(padding: const EdgeInsets.all(20), children: [const Text('نمای کلی امروز', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800)), const SizedBox(height: 8), const Text('وضعیت سفارش‌های تخصیص‌داده‌شده به شما', style: TextStyle(color: AppColors.secondaryText)), const SizedBox(height: 20), Card(child: Padding(padding: const EdgeInsets.all(18), child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [Summary('سفارش امروز', orders.length, AppColors.primary), Summary('تحویل‌شده', delivered, AppColors.success)])))]; })));
+class DashboardPage extends ConsumerWidget {
+  const DashboardPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return AppScaffold(
+      title: 'تحویل سبلان پرند',
+      body: ref.watch(ordersProvider).when(
+            loading: () => const LoadingView(),
+            error: (_, __) => RetryView(
+              onRetry: () => ref.invalidate(ordersProvider),
+            ),
+            data: (orders) {
+              final delivered = orders.where((order) => order.status == 'delivered').length;
+              return ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  const Text('نمای کلی امروز', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 8),
+                  const Text('وضعیت سفارش‌های تخصیص‌داده‌شده به شما', style: TextStyle(color: AppColors.secondaryText)),
+                  const SizedBox(height: 20),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          Summary('سفارش امروز', orders.length, AppColors.primary),
+                          Summary('تحویل‌شده', delivered, AppColors.success),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+    );
+  }
 }
 
 class Summary extends StatelessWidget { const Summary(this.label, this.value, this.color, {super.key}); final String label; final int value; final Color color; @override Widget build(BuildContext context) => Column(children: [Text('$value', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: color)), Text(label, style: const TextStyle(color: AppColors.secondaryText))]); }
