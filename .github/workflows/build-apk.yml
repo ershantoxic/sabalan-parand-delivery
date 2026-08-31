@@ -39,7 +39,7 @@ jobs:
         run: flutter pub get
 
       - name: Verify Dart formatting
-        run: dart format .
+        run: dart format --output=none .
 
       - name: Analyze Flutter project
         run: flutter analyze
