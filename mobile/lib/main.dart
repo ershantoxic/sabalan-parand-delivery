@@ -134,7 +134,64 @@ class OrderDetailPage extends ConsumerWidget { const OrderDetailPage({required t
 class VerifyCodePage extends ConsumerStatefulWidget { const VerifyCodePage({required this.order, super.key}); final Order order; @override ConsumerState<VerifyCodePage> createState() => _VerifyCodePageState(); }
 class _VerifyCodePageState extends ConsumerState<VerifyCodePage> { final code = TextEditingController(); bool busy = false; @override void dispose() { code.dispose(); super.dispose(); } Future<void> verify() async { if (code.text.length != 6) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('کد تحویل باید ۶ رقم باشد.'))); return; } setState(() => busy = true); try { await ref.read(apiProvider).dio.post('/orders/${widget.order.id}/verify-delivery-code', data: {'code': code.text}); if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PaymentPage(order: widget.order))); } on DioException { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('کد صحیح نیست.'))); } finally { if (mounted) setState(() => busy = false); } } @override Widget build(BuildContext context) => AppScaffold(title: 'تأیید تحویل سفارش', body: Padding(padding: const EdgeInsets.all(24), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [const Spacer(), const Text('کد تحویل دریافت‌شده از مشتری را وارد کنید.', textAlign: TextAlign.center, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)), const SizedBox(height: 22), TextField(controller: code, maxLength: 6, keyboardType: TextInputType.number, textAlign: TextAlign.center, style: const TextStyle(fontSize: 24, letterSpacing: 10), decoration: const InputDecoration(counterText: '', hintText: '••••••')), const SizedBox(height: 20), FilledButton(onPressed: busy ? null : verify, child: const Text('بررسی کد تحویل')), const Spacer()]))); }
 
-class PaymentPage extends ConsumerStatefulWidget { const PaymentPage({required this.order, super.key}); final Order order; @override ConsumerState<PaymentPage> createState() => _PaymentPageState(); }
-class _PaymentPageState extends ConsumerState<PaymentPage> { String method = 'card'; bool busy = false; final amount = TextEditingController(); final reference = TextEditingController(); @override void dispose() { amount.dispose(); reference.dispose(); super.dispose(); } Future<void> submit() async { setState(() => busy = true); try { final value = int.tryParse(amount.text.replaceAll(',', '')) ?? (widget.order.amount as int); await ref.read(apiProvider).dio.post('/orders/${widget.order.id}/payment', data: {'method': method, 'amount': value, 'reference_number': reference.text}); await ref.read(apiProvider).dio.post('/orders/${widget.order.id}/complete-delivery', data: {'idempotency_key': '${widget.order.id}-${DateTime.now().millisecondsSinceEpoch}'}); if (mounted) Navigator.popUntil(context, (route) => route.isFirst); } on DioException { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ثبت تحویل ناموفق بود.'))); } finally { if (mounted) setState(() => busy = false); } } @override Widget build(BuildContext context) => AppScaffold(title: 'ثبت پرداخت', body: ListView(padding: const EdgeInsets.all(20), children: [const Text('روش تسویه را انتخاب کنید', style: TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 12), DropdownButtonFormField(value: method, items: const [DropdownMenuItem(value: 'card', child: Text('کارتخوان')), DropdownMenuItem(value: 'cash', child: Text('نقدی')), DropdownMenuItem(value: 'cheque', child: Text('چک')), DropdownMenuItem(value: 'credit', child: Text('اعتباری')), DropdownMenuItem(value: 'bank_transfer', child: Text('واریز بانکی')), DropdownMenuItem(value: 'prepaid', child: Text('قبلاً پرداخت شده'))], onChanged: (value) => setState(() => method = value!)), const SizedBox(height: 12), TextField(controller: amount, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'مبلغ (پیشنهادی: ${widget.order.amount})')), const SizedBox(height: 12), TextField(controller: reference, decoration: const InputDecoration(labelText: 'شماره پیگیری (در صورت وجود)')), const SizedBox(height: 22), FilledButton(onPressed: busy ? null : submit, child: const Text('ثبت پرداخت و تکمیل تحویل'))])); }
+class PaymentPage extends ConsumerStatefulWidget {
+  const PaymentPage({required this.order, super.key});
+  final Order order;
+
+  @override
+  ConsumerState<PaymentPage> createState() => _PaymentPageState();
+}
+
+class _PaymentPageState extends ConsumerState<PaymentPage> {
+  String method = 'card';
+  bool busy = false;
+  final amount = TextEditingController();
+  final reference = TextEditingController();
+
+  @override
+  void dispose() { amount.dispose(); reference.dispose(); super.dispose(); }
+
+  Future<void> submit() async {
+    setState(() => busy = true);
+    try {
+      final value = int.tryParse(amount.text.replaceAll(',', '')) ?? (widget.order.amount as int);
+      await ref.read(apiProvider).dio.post('/orders/${widget.order.id}/payment', data: {'method': method, 'amount': value, 'reference_number': reference.text});
+      await ref.read(apiProvider).dio.post('/orders/${widget.order.id}/complete-delivery', data: {'idempotency_key': '${widget.order.id}-${DateTime.now().millisecondsSinceEpoch}'});
+      if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
+    } on DioException {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ثبت تحویل ناموفق بود.')));
+    } finally { if (mounted) setState(() => busy = false); }
+  }
+
+  @override
+  Widget build(BuildContext context) => AppScaffold(
+    title: 'ثبت پرداخت',
+    body: ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        const Text('روش تسویه را انتخاب کنید', style: TextStyle(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          initialValue: method,
+          items: const [
+            DropdownMenuItem(value: 'card', child: Text('کارتخوان')),
+            DropdownMenuItem(value: 'cash', child: Text('نقدی')),
+            DropdownMenuItem(value: 'cheque', child: Text('چک')),
+            DropdownMenuItem(value: 'credit', child: Text('اعتباری')),
+            DropdownMenuItem(value: 'bank_transfer', child: Text('واریز بانکی')),
+            DropdownMenuItem(value: 'prepaid', child: Text('قبلاً پرداخت شده')),
+          ],
+          onChanged: (value) { if (value != null) setState(() => method = value); },
+        ),
+        const SizedBox(height: 12),
+        TextField(controller: amount, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'مبلغ (پیشنهادی: ${widget.order.amount})')),
+        const SizedBox(height: 12),
+        TextField(controller: reference, decoration: const InputDecoration(labelText: 'شماره پیگیری (در صورت وجود)')),
+        const SizedBox(height: 22),
+        FilledButton(onPressed: busy ? null : submit, child: const Text('ثبت پرداخت و تکمیل تحویل')),
+      ],
+    ),
+  );
+}
 
 class ProfilePage extends ConsumerWidget { const ProfilePage({super.key}); @override Widget build(BuildContext context, WidgetRef ref) => AppScaffold(title: 'پروفایل', body: Padding(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [const SabalanLogo(size: 92), const Spacer(), OutlinedButton.icon(onPressed: () async { await ref.read(storageProvider).delete(key: 'token'); if (context.mounted) Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginPage()), (_) => false); }, icon: const Icon(Icons.logout), label: const Text('خروج از حساب'))]))); }
