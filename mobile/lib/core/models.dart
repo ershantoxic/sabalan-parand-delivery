@@ -1,0 +1,1 @@
+class Order {Order.fromJson(Map<String,dynamic> j):id=j['id'],number=j['order_number'],status=j['status'],amount=j['total_amount'],weight=j['total_weight'].toString(),customer=Map<String,dynamic>.from(j['customer']??{}),notes=j['notes'];final int id;final String number,status,weight;final dynamic amount;final Map<String,dynamic> customer;final String? notes;}

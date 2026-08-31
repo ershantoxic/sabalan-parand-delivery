@@ -1,0 +1,10 @@
+<?php
+namespace Tests\Feature;
+use App\Enums\OrderStatus;use App\Models\{Customer,Order,User};use App\Services\DeliveryService;use Illuminate\Foundation\Testing\RefreshDatabase;use Spatie\Permission\Models\Role;use Tests\TestCase;
+class DeliveryWorkflowTest extends TestCase {use RefreshDatabase;
+protected function setUp():void{parent::setUp();Role::create(['name'=>'Visitor']);}
+private function visitor():User{$u=User::factory()->create();$u->assignRole('Visitor');return $u;}
+private function order(User $v):Order{$c=Customer::create(['customer_code'=>'C-'.uniqid(),'name'=>'Customer','mobile'=>'09120000000','address'=>'Tehran']);return Order::create(['order_number'=>'SP-'.uniqid(),'customer_id'=>$c->id,'visitor_id'=>$v->id,'order_date'=>today(),'delivery_date'=>today(),'total_weight'=>1,'total_amount'=>1000,'status'=>OrderStatus::Assigned]);}
+public function test_visitor_cannot_access_another_visitor_order():void{$v=$this->visitor();$o=$this->order($this->visitor());$this->actingAs($v,'sanctum')->getJson("/api/orders/{$o->id}")->assertForbidden();}
+public function test_invalid_code_is_logged_and_limited():void{$v=$this->visitor();$o=$this->order($v);app(DeliveryService::class)->issueCode($o->load('customer'));$this->actingAs($v,'sanctum')->postJson("/api/orders/{$o->id}/start-delivery");for($i=0;$i<5;$i++)$this->postJson("/api/orders/{$o->id}/verify-delivery-code",['code'=>'000000']);$this->postJson("/api/orders/{$o->id}/verify-delivery-code",['code'=>'000000'])->assertStatus(423);$this->assertDatabaseCount('delivery_code_attempts',5);}
+public function test_delivered_order_cannot_be_completed_twice():void{$v=$this->visitor();$o=$this->order($v);$o->update(['status'=>OrderStatus::CodeVerified]);$o->payments()->create(['visitor_id'=>$v->id,'method'=>'cash','amount'=>1000]);$this->actingAs($v,'sanctum')->postJson("/api/orders/{$o->id}/complete-delivery",['idempotency_key'=>'one'])->assertOk();$this->postJson("/api/orders/{$o->id}/complete-delivery",['idempotency_key'=>'two'])->assertStatus(409);}}

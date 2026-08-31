@@ -1,0 +1,3 @@
+<?php
+namespace App\Http\Controllers\Api;use App\Enums\OrderStatus;use App\Models\Order;use Illuminate\Http\Request;
+class DashboardController extends ApiController {public function __invoke(Request $r){$q=Order::where('visitor_id',$r->user()->id)->whereDate('delivery_date',today());return $this->ok(['today_total'=>(clone $q)->count(),'delivered'=>(clone $q)->where('status',OrderStatus::Delivered)->count(),'pending'=>(clone $q)->whereIn('status',[OrderStatus::Assigned,OrderStatus::Pending,OrderStatus::OutForDelivery])->count(),'failed'=>(clone $q)->where('status',OrderStatus::DeliveryFailed)->count(),'cancelled'=>(clone $q)->where('status',OrderStatus::Cancelled)->count()]);}}

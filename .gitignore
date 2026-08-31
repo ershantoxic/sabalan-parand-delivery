@@ -1,0 +1,12 @@
+backend/.env
+backend/vendor/
+backend/node_modules/
+mobile/.dart_tool/
+mobile/build/
+mobile/android/key.properties
+mobile/android/*.jks
+mobile/android/*.keystore
+mobile/.idea/
+mobile/.vscode/
+backend/.idea/
+backend/.vscode/
