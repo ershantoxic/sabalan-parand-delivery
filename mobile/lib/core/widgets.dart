@@ -41,7 +41,7 @@ class StatusBadge extends StatelessWidget {
     final ({String label, Color color}) values = switch (status) {
       'delivered' => (label: 'تحویل شده', color: AppColors.success),
       'out_for_delivery' => (label: 'در حال ارسال', color: AppColors.warning),
-      'code_verified' => (label: 'کد تأیید شد', color: AppColors.success),
+      'delivery_code_verified' => (label: 'کد تحویل تایید شد', color: AppColors.success),
       'delivery_failed' => (label: 'عدم تحویل', color: AppColors.error),
       'assigned' => (label: 'تخصیص داده شده', color: AppColors.primary),
       _ => (label: 'در انتظار تحویل', color: AppColors.secondaryText),

@@ -126,13 +126,61 @@ class DashboardPage extends ConsumerWidget {
 class Summary extends StatelessWidget { const Summary(this.label, this.value, this.color, {super.key}); final String label; final int value; final Color color; @override Widget build(BuildContext context) => Column(children: [Text('$value', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: color)), Text(label, style: const TextStyle(color: AppColors.secondaryText))]); }
 class RetryView extends StatelessWidget { const RetryView({required this.onRetry, super.key}); final VoidCallback onRetry; @override Widget build(BuildContext context) => Center(child: OutlinedButton(onPressed: onRetry, child: const Text('تلاش مجدد'))); }
 
-class OrdersPage extends ConsumerWidget { const OrdersPage({super.key}); @override Widget build(BuildContext context, WidgetRef ref) => AppScaffold(title: 'سفارش‌های امروز', body: ref.watch(ordersProvider).when(loading: () => const LoadingView(), error: (_, __) => RetryView(onRetry: () => ref.invalidate(ordersProvider)), data: (orders) => orders.isEmpty ? const EmptyState() : ListView.separated(padding: const EdgeInsets.all(16), itemCount: orders.length, separatorBuilder: (_, __) => const SizedBox(height: 12), itemBuilder: (_, index) => OrderCard(order: orders[index])))); }
+class OrdersPage extends ConsumerWidget {
+  const OrdersPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => AppScaffold(
+        title: 'سفارش‌های امروز',
+        body: ref.watch(ordersProvider).when(
+              loading: () => const LoadingView(),
+              error: (_, __) => RetryView(
+                onRetry: () => ref.invalidate(ordersProvider),
+              ),
+              data: (orders) {
+                final activeOrders = orders
+                    .where((order) => order.status != 'delivered')
+                    .toList(growable: false);
+
+                return activeOrders.isEmpty
+                    ? const EmptyState()
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: activeOrders.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (_, index) => OrderCard(order: activeOrders[index]),
+                      );
+              },
+            ),
+      );
+}
 class OrderCard extends StatelessWidget { const OrderCard({required this.order, super.key}); final Order order; @override Widget build(BuildContext context) => Card(child: ListTile(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrderDetailPage(order: order))), title: Text('سفارش ${order.number}', style: const TextStyle(fontWeight: FontWeight.w800)), subtitle: Text((order.customer['name'] ?? '').toString()), trailing: StatusBadge(status: order.status))); }
 
-class OrderDetailPage extends ConsumerWidget { const OrderDetailPage({required this.order, super.key}); final Order order; Future<void> _start(BuildContext context, WidgetRef ref) async { try { await ref.read(apiProvider).dio.post('/orders/${order.id}/start-delivery'); if (context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => VerifyCodePage(order: order))); } on DioException { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('امکان شروع تحویل وجود ندارد.'))); } } @override Widget build(BuildContext context, WidgetRef ref) => AppScaffold(title: 'جزئیات سفارش', body: ListView(padding: const EdgeInsets.all(20), children: [Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('اطلاعات مشتری', style: TextStyle(fontWeight: FontWeight.w800)), const Divider(), Text((order.customer['name'] ?? '').toString()), Text((order.customer['address'] ?? '').toString())]))), const SizedBox(height: 12), Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('اطلاعات سفارش', style: TextStyle(fontWeight: FontWeight.w800)), const Divider(), Text('شماره سفارش: ${order.number}'), Text('وزن کل: ${order.weight} کیلوگرم'), Text('مبلغ: ${order.amount} تومان'), const SizedBox(height: 10), StatusBadge(status: order.status)]))), const SizedBox(height: 24), FilledButton(onPressed: () => _start(context, ref), child: const Text('شروع تحویل'))])); }
+class OrderDetailPage extends ConsumerWidget {
+  const OrderDetailPage({required this.order, super.key});
+
+  final Order order;
+
+  Future<void> _start(BuildContext context, WidgetRef ref) async {
+    try {
+      await ref.read(apiProvider).dio.post('/orders/${order.id}/start-delivery');
+      ref.invalidate(ordersProvider);
+      if (context.mounted) {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => VerifyCodePage(order: order)));
+      }
+    } on DioException {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('امکان شروع تحویل وجود ندارد.')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => AppScaffold(title: 'جزئیات سفارش', body: ListView(padding: const EdgeInsets.all(20), children: [Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('اطلاعات مشتری', style: TextStyle(fontWeight: FontWeight.w800)), const Divider(), Text((order.customer['name'] ?? '').toString()), Text((order.customer['address'] ?? '').toString())]))), const SizedBox(height: 12), Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('اطلاعات سفارش', style: TextStyle(fontWeight: FontWeight.w800)), const Divider(), Text('شماره سفارش: ${order.number}'), Text('وزن کل: ${order.weight} کیلوگرم'), Text('مبلغ: ${order.amount} تومان'), const SizedBox(height: 10), StatusBadge(status: order.status)]))), const SizedBox(height: 24), FilledButton(onPressed: () => _start(context, ref), child: const Text('شروع تحویل'))]));
+}
 
 class VerifyCodePage extends ConsumerStatefulWidget { const VerifyCodePage({required this.order, super.key}); final Order order; @override ConsumerState<VerifyCodePage> createState() => _VerifyCodePageState(); }
-class _VerifyCodePageState extends ConsumerState<VerifyCodePage> { final code = TextEditingController(); bool busy = false; @override void dispose() { code.dispose(); super.dispose(); } Future<void> verify() async { if (code.text.length != 6) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('کد تحویل باید ۶ رقم باشد.'))); return; } setState(() => busy = true); try { await ref.read(apiProvider).dio.post('/orders/${widget.order.id}/verify-delivery-code', data: {'code': code.text}); if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PaymentPage(order: widget.order))); } on DioException { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('کد صحیح نیست.'))); } finally { if (mounted) setState(() => busy = false); } } @override Widget build(BuildContext context) => AppScaffold(title: 'تأیید تحویل سفارش', body: Padding(padding: const EdgeInsets.all(24), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [const Spacer(), const Text('کد تحویل دریافت‌شده از مشتری را وارد کنید.', textAlign: TextAlign.center, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)), const SizedBox(height: 22), TextField(controller: code, maxLength: 6, keyboardType: TextInputType.number, textAlign: TextAlign.center, style: const TextStyle(fontSize: 24, letterSpacing: 10), decoration: const InputDecoration(counterText: '', hintText: '••••••')), const SizedBox(height: 20), FilledButton(onPressed: busy ? null : verify, child: const Text('بررسی کد تحویل')), const Spacer()]))); }
+class _VerifyCodePageState extends ConsumerState<VerifyCodePage> { final code = TextEditingController(); bool busy = false; @override void dispose() { code.dispose(); super.dispose(); } Future<void> verify() async { if (code.text.length != 6) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('کد تحویل باید ۶ رقم باشد.'))); return; } setState(() => busy = true); try { await ref.read(apiProvider).dio.post('/orders/${widget.order.id}/verify-delivery-code', data: {'code': code.text}); ref.invalidate(ordersProvider); if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PaymentPage(order: widget.order))); } on DioException { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('کد صحیح نیست.'))); } finally { if (mounted) setState(() => busy = false); } } @override Widget build(BuildContext context) => AppScaffold(title: 'تأیید تحویل سفارش', body: Padding(padding: const EdgeInsets.all(24), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [const Spacer(), const Text('کد تحویل دریافت‌شده از مشتری را وارد کنید.', textAlign: TextAlign.center, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)), const SizedBox(height: 22), TextField(controller: code, maxLength: 6, keyboardType: TextInputType.number, textAlign: TextAlign.center, style: const TextStyle(fontSize: 24, letterSpacing: 10), decoration: const InputDecoration(counterText: '', hintText: '••••••')), const SizedBox(height: 20), FilledButton(onPressed: busy ? null : verify, child: const Text('بررسی کد تحویل')), const Spacer()]))); }
 
 class PaymentPage extends ConsumerStatefulWidget {
   const PaymentPage({required this.order, super.key});
@@ -156,7 +204,9 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
     try {
       final value = int.tryParse(amount.text.replaceAll(',', '')) ?? (widget.order.amount as int);
       await ref.read(apiProvider).dio.post('/orders/${widget.order.id}/payment', data: {'method': method, 'amount': value, 'reference_number': reference.text});
+      ref.invalidate(ordersProvider);
       await ref.read(apiProvider).dio.post('/orders/${widget.order.id}/complete-delivery', data: {'idempotency_key': '${widget.order.id}-${DateTime.now().millisecondsSinceEpoch}'});
+      ref.invalidate(ordersProvider);
       if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
     } on DioException {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ثبت تحویل ناموفق بود.')));
