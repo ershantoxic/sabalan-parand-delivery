@@ -156,27 +156,38 @@ class OrdersPage extends ConsumerWidget {
 }
 class OrderCard extends StatelessWidget { const OrderCard({required this.order, super.key}); final Order order; @override Widget build(BuildContext context) => Card(child: ListTile(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrderDetailPage(order: order))), title: Text('سفارش ${order.number}', style: const TextStyle(fontWeight: FontWeight.w800)), subtitle: Text((order.customer['name'] ?? '').toString()), trailing: StatusBadge(status: order.status))); }
 
-class OrderDetailPage extends ConsumerWidget {
+class OrderDetailPage extends ConsumerStatefulWidget {
   const OrderDetailPage({required this.order, super.key});
 
   final Order order;
 
-  Future<void> _start(BuildContext context, WidgetRef ref) async {
+  @override
+  ConsumerState<OrderDetailPage> createState() => _OrderDetailPageState();
+}
+
+class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
+  bool _starting = false;
+
+  Future<void> _start() async {
+    if (_starting) return;
+    setState(() => _starting = true);
     try {
-      await ref.read(apiProvider).dio.post('/orders/${order.id}/start-delivery');
+      await ref.read(apiProvider).dio.post('/orders/${widget.order.id}/start-delivery');
       ref.invalidate(ordersProvider);
-      if (context.mounted) {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => VerifyCodePage(order: order)));
+      if (mounted) {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => VerifyCodePage(order: widget.order)));
       }
     } on DioException {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('امکان شروع تحویل وجود ندارد.')));
       }
+    } finally {
+      if (mounted) setState(() => _starting = false);
     }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => AppScaffold(title: 'جزئیات سفارش', body: ListView(padding: const EdgeInsets.all(20), children: [Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('اطلاعات مشتری', style: TextStyle(fontWeight: FontWeight.w800)), const Divider(), Text((order.customer['name'] ?? '').toString()), Text((order.customer['address'] ?? '').toString())]))), const SizedBox(height: 12), Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('اطلاعات سفارش', style: TextStyle(fontWeight: FontWeight.w800)), const Divider(), Text('شماره سفارش: ${order.number}'), Text('وزن کل: ${order.weight} کیلوگرم'), Text('مبلغ: ${order.amount} تومان'), const SizedBox(height: 10), StatusBadge(status: order.status)]))), const SizedBox(height: 24), FilledButton(onPressed: () => _start(context, ref), child: const Text('شروع تحویل'))]));
+  Widget build(BuildContext context) => AppScaffold(title: 'جزئیات سفارش', body: ListView(padding: const EdgeInsets.all(20), children: [Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('اطلاعات مشتری', style: TextStyle(fontWeight: FontWeight.w800)), const Divider(), Text((widget.order.customer['name'] ?? '').toString()), Text((widget.order.customer['address'] ?? '').toString())]))), const SizedBox(height: 12), Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('اطلاعات سفارش', style: TextStyle(fontWeight: FontWeight.w800)), const Divider(), Text('شماره سفارش: ${widget.order.number}'), Text('وزن کل: ${widget.order.weight} کیلوگرم'), Text('مبلغ: ${widget.order.amount} تومان'), const SizedBox(height: 10), StatusBadge(status: widget.order.status)]))), const SizedBox(height: 24), FilledButton(onPressed: _starting ? null : _start, child: _starting ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('شروع تحویل'))]));
 }
 
 class VerifyCodePage extends ConsumerStatefulWidget { const VerifyCodePage({required this.order, super.key}); final Order order; @override ConsumerState<VerifyCodePage> createState() => _VerifyCodePageState(); }
