@@ -167,6 +167,14 @@ class OrderDetailPage extends ConsumerStatefulWidget {
 
 class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
   bool _starting = false;
+  bool _verifying = false;
+  final _deliveryCode = TextEditingController();
+
+  @override
+  void dispose() {
+    _deliveryCode.dispose();
+    super.dispose();
+  }
 
   Future<void> _start() async {
     if (_starting) return;
@@ -177,21 +185,98 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       if (mounted) {
         Navigator.push(context, MaterialPageRoute(builder: (_) => VerifyCodePage(order: widget.order)));
       }
-    } on DioException {
+    } on DioException catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('امکان شروع تحویل وجود ندارد.')));
+        final message = error.response?.statusCode == 409
+            ? 'این سفارش قبلاً شروع شده است. کد تحویل را وارد کنید.'
+            : 'امکان شروع تحویل وجود ندارد.';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       }
     } finally {
       if (mounted) setState(() => _starting = false);
     }
   }
 
+  Future<void> _verifyDeliveryCode() async {
+    if (_deliveryCode.text.length != 6) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('کد تحویل باید ۶ رقم باشد.')));
+      return;
+    }
+
+    setState(() => _verifying = true);
+    try {
+      await ref.read(apiProvider).dio.post(
+        '/orders/${widget.order.id}/verify-delivery-code',
+        data: {'code': _deliveryCode.text},
+      );
+      ref.invalidate(ordersProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تحویل سفارش با موفقیت ثبت شد.')));
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    } on DioException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('کد صحیح نیست.')));
+      }
+    } finally {
+      if (mounted) setState(() => _verifying = false);
+    }
+  }
+
+  Widget _deliveryAction() {
+    switch (widget.order.status) {
+      case 'pending':
+        return FilledButton(
+          onPressed: _starting ? null : _start,
+          child: _starting
+              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Text('شروع تحویل'),
+        );
+      case 'out_for_delivery':
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('کد تحویل برای مشتری ارسال شده است.', style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _deliveryCode,
+                  maxLength: 6,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  decoration: const InputDecoration(counterText: '', labelText: 'کد تحویل مشتری'),
+                ),
+                const SizedBox(height: 8),
+                FilledButton(
+                  onPressed: _verifying ? null : _verifyDeliveryCode,
+                  child: _verifying
+                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('تأیید تحویل'),
+                ),
+              ],
+            ),
+          ),
+        );
+      case 'delivered':
+        return const Card(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Text('این سفارش تحویل شده است.', textAlign: TextAlign.center),
+          ),
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
   @override
-  Widget build(BuildContext context) => AppScaffold(title: 'جزئیات سفارش', body: ListView(padding: const EdgeInsets.all(20), children: [Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('اطلاعات مشتری', style: TextStyle(fontWeight: FontWeight.w800)), const Divider(), Text((widget.order.customer['name'] ?? '').toString()), Text((widget.order.customer['address'] ?? '').toString())]))), const SizedBox(height: 12), Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('اطلاعات سفارش', style: TextStyle(fontWeight: FontWeight.w800)), const Divider(), Text('شماره سفارش: ${widget.order.number}'), Text('وزن کل: ${widget.order.weight} کیلوگرم'), Text('مبلغ: ${widget.order.amount} تومان'), const SizedBox(height: 10), StatusBadge(status: widget.order.status)]))), const SizedBox(height: 24), FilledButton(onPressed: _starting ? null : _start, child: _starting ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('شروع تحویل'))]));
+  Widget build(BuildContext context) => AppScaffold(title: 'جزئیات سفارش', body: ListView(padding: const EdgeInsets.all(20), children: [Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('اطلاعات مشتری', style: TextStyle(fontWeight: FontWeight.w800)), const Divider(), Text((widget.order.customer['name'] ?? '').toString()), Text((widget.order.customer['address'] ?? '').toString())]))), const SizedBox(height: 12), Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('اطلاعات سفارش', style: TextStyle(fontWeight: FontWeight.w800)), const Divider(), Text('شماره سفارش: ${widget.order.number}'), Text('وزن کل: ${widget.order.weight} کیلوگرم'), Text('مبلغ: ${widget.order.amount} تومان'), const SizedBox(height: 10), StatusBadge(status: widget.order.status)]))), const SizedBox(height: 24), _deliveryAction()]));
 }
 
 class VerifyCodePage extends ConsumerStatefulWidget { const VerifyCodePage({required this.order, super.key}); final Order order; @override ConsumerState<VerifyCodePage> createState() => _VerifyCodePageState(); }
-class _VerifyCodePageState extends ConsumerState<VerifyCodePage> { final code = TextEditingController(); bool busy = false; @override void dispose() { code.dispose(); super.dispose(); } Future<void> verify() async { if (code.text.length != 6) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('کد تحویل باید ۶ رقم باشد.'))); return; } setState(() => busy = true); try { await ref.read(apiProvider).dio.post('/orders/${widget.order.id}/verify-delivery-code', data: {'code': code.text}); ref.invalidate(ordersProvider); if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PaymentPage(order: widget.order))); } on DioException { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('کد صحیح نیست.'))); } finally { if (mounted) setState(() => busy = false); } } @override Widget build(BuildContext context) => AppScaffold(title: 'تأیید تحویل سفارش', body: Padding(padding: const EdgeInsets.all(24), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [const Spacer(), const Text('کد تحویل دریافت‌شده از مشتری را وارد کنید.', textAlign: TextAlign.center, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)), const SizedBox(height: 22), TextField(controller: code, maxLength: 6, keyboardType: TextInputType.number, textAlign: TextAlign.center, style: const TextStyle(fontSize: 24, letterSpacing: 10), decoration: const InputDecoration(counterText: '', hintText: '••••••')), const SizedBox(height: 20), FilledButton(onPressed: busy ? null : verify, child: const Text('بررسی کد تحویل')), const Spacer()]))); }
+class _VerifyCodePageState extends ConsumerState<VerifyCodePage> { final code = TextEditingController(); bool busy = false; @override void dispose() { code.dispose(); super.dispose(); } Future<void> verify() async { if (code.text.length != 6) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('کد تحویل باید ۶ رقم باشد.'))); return; } setState(() => busy = true); try { await ref.read(apiProvider).dio.post('/orders/${widget.order.id}/verify-delivery-code', data: {'code': code.text}); ref.invalidate(ordersProvider); if (mounted) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تحویل سفارش با موفقیت ثبت شد.'))); Navigator.of(context).popUntil((route) => route.isFirst); } } on DioException { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('کد صحیح نیست.'))); } finally { if (mounted) setState(() => busy = false); } } @override Widget build(BuildContext context) => AppScaffold(title: 'تأیید تحویل سفارش', body: Padding(padding: const EdgeInsets.all(24), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [const Spacer(), const Text('کد تحویل دریافت‌شده از مشتری را وارد کنید.', textAlign: TextAlign.center, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)), const SizedBox(height: 22), TextField(controller: code, maxLength: 6, keyboardType: TextInputType.number, textAlign: TextAlign.center, style: const TextStyle(fontSize: 24, letterSpacing: 10), decoration: const InputDecoration(counterText: '', hintText: '••••••')), const SizedBox(height: 20), FilledButton(onPressed: busy ? null : verify, child: const Text('بررسی کد تحویل')), const Spacer()]))); }
 
 class PaymentPage extends ConsumerStatefulWidget {
   const PaymentPage({required this.order, super.key});
